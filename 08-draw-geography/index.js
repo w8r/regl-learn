@@ -34,9 +34,10 @@ const drawLines = regl({
   vert: `
     precision mediump float;
     attribute vec2 position;
+    uniform float uShift;
 
     void main() {
-      gl_Position = vec4(position, 0, 1);
+      gl_Position = vec4(position + vec2(uShift), 0, 1);
     }`,
 
   attributes: {
@@ -50,7 +51,8 @@ const drawLines = regl({
   },
 
   uniforms: {
-    color: [0, 1, 0, 1]
+    color: [0.13, 0.13, 0.13, 1],
+    uShift: ({ tick }) => tick / 1000
   },
 
   lineWidth
@@ -61,26 +63,38 @@ d3.json('https://unpkg.com/us-atlas@1/us/10m.json').then(us => {
   const usMesh = topojson.mesh(us)
 
   regl.clear({
-    color: [0, 0, 0, 1],
+    color: [1, 0.98, 0.84375, 1],
     depth: 1
   })
 
+  const vCount = usMesh.coordinates.reduce((acc, m) => acc + m.length, 0);
+  const positions = [], indexes = [];
+
+  let cnt = 0;
   for (const mesh of usMesh.coordinates) {
-    // Map xy points to the webgl coordinate system
-    const positions = mesh.map(d => [x(d[0]), y(d[1])])
 
-    // Build a list of indexes that map to the positions array
-    // [[0, 1], [1, 2], ...]
-    const indexes = mesh.reduce((a, b, i) => {
-      if (i + 1 < mesh.length) a.push([i, i + 1])
-      return a
-    }, [])
+    for (let i = 0; i < mesh.length; i++) {
+      // Map xy points to the webgl coordinate system
+      const d = mesh[i];
+      positions.push([x(d[0]), y(d[1])]);
 
-    const elements = regl.elements({
-      primitive: 'lines',
-      data: indexes
-    })
-
-    drawLines({elements, positions})
+      // Build a list of indexes that map to the positions array
+      // [[0, 1], [1, 2], ...]
+      if (i + 1 < mesh.length) indexes.push([cnt + i, cnt + i + 1]);
+    }
+    cnt += mesh.length;
   }
+
+  const elements = regl.elements({
+    primitive: 'lines',
+    data: indexes
+  });
+
+  regl.frame(({ tick }) => {
+    regl.clear({
+      color: [1, 0.98, 0.84375, 1],
+      depth: 1
+    })
+    drawLines({ elements, positions });
+  });
 })
